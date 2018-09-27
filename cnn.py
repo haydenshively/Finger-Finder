@@ -1,96 +1,114 @@
-'''Trains a simple convnet on the MNIST dataset.
-Gets to 99.25% test accuracy after 12 epochs
-(there is still a lot of margin for parameter tuning).
-16 seconds per epoch on a GRID K520 GPU.
-'''
-
-from __future__ import print_function
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Flatten
 from keras.layers import Conv2D, MaxPooling2D
-from keras import backend as K
-
-from OnlineAugmentation import ImageDataGenerator
 
 import numpy as np
-def load_data():
-    x = np.load('X.npy')
-    y = np.load('Y.npy')
-    x_train = x[:20000]
-    y_train = y[:20000]
-    x_test = x[20000:]
-    y_test = y[20000:]
-    return (x_train, y_train), (x_test, y_test)
 
-batch_size = 128
-# num_classes = 10
-epochs = 12
+class LearningStyle(object):
+    def __init__(self, loss, optimizer, metrics):
+        self.loss = loss
+        self.optimizer = optimizer
+        self.metrics = metrics
 
-# input image dimensions
-img_rows, img_cols = 28, 28
-
-# the data, split between train and test sets
-(x_train, y_train), (x_test, y_test) = load_data()
-
-if K.image_data_format() == 'channels_first':
-    x_train = x_train.reshape(x_train.shape[0], 3, img_rows, img_cols)
-    x_test = x_test.reshape(x_test.shape[0], 3, img_rows, img_cols)
-    input_shape = (3, img_rows, img_cols)
-else:
-    x_train = x_train.reshape(x_train.shape[0], img_rows, img_cols, 3)
-    x_test = x_test.reshape(x_test.shape[0], img_rows, img_cols, 3)
-    input_shape = (img_rows, img_cols, 3)
-
-x_train = x_train.astype('float32')
-x_test = x_test.astype('float32')
-x_train /= 255
-x_test /= 255
-print('x_train shape:', x_train.shape)
-print(x_train.shape[0], 'train samples')
-print(x_test.shape[0], 'test samples')
-
-# convert class vectors to binary class matrices
-y_train = keras.utils.to_categorical(y_train)
-y_test = keras.utils.to_categorical(y_test)
+    def apply_to(self, model):
+        model.compile(loss = self.loss, optimizer = self.optimizer, metrics = self.metrics)
 
 
-datagen = ImageDataGenerator(
-    rotation_range = 90,
-    horizontal_flip = True,
-    vertical_flip = True,
-    data_format = K.image_data_format(),
-    blurring = False,
-    white_to_color = True
-);
+class Tiny(object):
+    default_learning_style = LearningStyle(keras.losses.binary_crossentropy, keras.optimizers.Adadelta(), metrics = ['accuracy'])
 
-model = Sequential()
-model.add(Conv2D(32, kernel_size=(3, 3),
-                 activation='relu',
-                 input_shape=input_shape))
-model.add(Conv2D(64, (3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
-model.add(Flatten())
-model.add(Dense(128, activation='relu'))
-model.add(Dropout(0.5))
-model.add(Dense(2, activation='softmax'))
+    def __init__(self, input_shape, class_count, learning_style = default_learning_style):
+        self.input_shape = input_shape
+        self.class_count = class_count
 
-model.compile(loss=keras.losses.binary_crossentropy,
-              optimizer=keras.optimizers.Adadelta(),
-              metrics=['accuracy'])
+        self.model = Tiny._architecture(self.input_shape, self.class_count)
+        self.learning_style = learning_style
 
-# model.fit(x_train, y_train,
-#           batch_size=batch_size,
-#           epochs=epochs,
-#           verbose=1,
-#           validation_data=(x_test, y_test))
-model.fit_generator(datagen.flow(x_train, y_train, batch_size = batch_size),
-                    steps_per_epoch = len(x_train)//batch_size, epochs = epochs,
-                    verbose = 1, validation_data = (x_test, y_test))
+    @staticmethod
+    def _architecture(input_shape, class_count):
+        archit = Sequential()
 
-score = model.evaluate(x_test, y_test, verbose=0)
-print('Test loss:', score[0])
-print('Test accuracy:', score[1])
+        archit.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=input_shape))
+        archit.add(Conv2D(64, kernel_size=(3, 3), activation='relu'))
+        archit.add(MaxPooling2D(pool_size=(2, 2)))
+        archit.add(Dropout(0.25))
+        archit.add(Flatten())
+        archit.add(Dense(128, activation='relu'))
+        archit.add(Dropout(0.5))
+        archit.add(Dense(class_count, activation='softmax'))
 
-model.save('Model/model.h5')
+        return archit
+
+    def save_to_file(self, path = 'model.h5'):
+        self.model.save(path)
+
+    @property
+    def learning_style(self):
+        return self._learning_style
+
+    @learning_style.setter
+    def learning_style(self, new_learning_style):
+        self._learning_style = new_learning_style
+        self._learning_style.apply_to(self.model)
+
+
+class Trainer(object):
+    def __init__(self):
+        self.input = None
+        self.output = None
+
+        self.data_generator = None
+        self.test_percent = 10
+
+    def train(self, model, epochs = 12, batch_size = 128):
+        test_index = self.input.shape[0]*(100 - self.test_percent)//100
+
+        x_train = self.input[:test_index]
+        y_train = self.output[:test_index]
+        x_test = self.input[test_index:]
+        y_test = self.output[test_index:]
+
+        if self.data_generator is None:
+            model.fit(x_train, y_train,
+                      batch_size = batch_size,
+                      epochs = epochs,
+                      verbose = 1,
+                      validation_data = (x_test, y_test))
+
+        else:
+            model.fit_generator(self.data_generator.flow(x_train, y_train, batch_size = batch_size),
+                                steps_per_epoch = x_train.shape[0]//batch_size,
+                                epochs = epochs,
+                                verbose = 1,
+                                validation_data = (x_test, y_test))
+
+
+    @staticmethod
+    def normalize_input(input):
+        return input.astype('float32')/input.max()
+
+    @property
+    def input(self):
+        return self._input
+
+    @input.setter
+    def input(self, new_input):
+        if type(new_input) is np.ndarray:
+            self._input = Trainer.normalize_input(new_input)
+        else: self._input = new_input
+
+    @staticmethod
+    def normalize_output(output):
+        if len(output.shape) is 1: return keras.utils.to_categorical(output)
+        else: return output
+
+    @property
+    def output(self):
+        return self._output
+
+    @output.setter
+    def output(self, new_output):
+        if type(new_output) is np.ndarray:
+            self._output = Trainer.normalize_output(new_output)
+        else: self._output = new_output
