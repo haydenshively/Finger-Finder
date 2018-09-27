@@ -1,11 +1,12 @@
 if __name__ == '__main__':
     from keras import backend as K
     import numpy as np
-    from OnlineAugmentation import ImageDataGenerator
-    import cnn
 
-    images = np.load('X.npy')
-    labels = np.load('Y.npy')
+    import cnn
+    from augmentation import ImageDataGenerator
+
+    images = np.load('22KSamples/images.npy')
+    labels = np.load('22KSamples/labels.npy')
 
     image_rows, image_cols = 28, 28
 
