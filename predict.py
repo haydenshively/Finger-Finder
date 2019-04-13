@@ -1,4 +1,4 @@
-from keras import models
+from tensorflow.keras import models
 import numpy as np
 import cv2
 
@@ -13,6 +13,8 @@ def callback(event,x,y,flags,param):
 
 cnn = models.load_model('models/tiny_cnn.h5')
 camera = cv2.VideoCapture(0)
+camera.set(3, 1920)
+camera.set(4, 1080)
 
 cv2.namedWindow('image')
 cv2.setMouseCallback('image',callback)
@@ -32,7 +34,7 @@ while True:
         end_y = iy + edge//2
 
         image = image[start_y:end_y, start_x:end_x]
-        for i in range(size/2):
+        for i in range(size//2):
             image = cv2.pyrDown(image)
 
         cv2.imshow('input', image)
