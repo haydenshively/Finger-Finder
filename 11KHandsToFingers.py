@@ -86,7 +86,7 @@ if __name__ == '__main__':
         h = 255 - cv2.threshold(h, 127, 255, cv2.THRESH_BINARY)[1]
 
         # find and filter contours
-        _, contours, _ = cv2.findContours(h, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(h, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for contour in contours:
 
             M = cv2.moments(contour)
@@ -117,5 +117,5 @@ if __name__ == '__main__':
                 # cv2.imshow('fingertip', fingertip)
                 # cv2.imshow('hand', hand)
         if (reader.id%100 == 0): print(reader.id/float(reader.end))
-        # ch = cv2.waitKey(0)
+        # ch = cv2.waitKey(1)
         # if ch == 27: break
